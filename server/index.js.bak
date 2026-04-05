@@ -1,0 +1,121 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+dotenv.config();
+
+const app = express();
+app.use(cors({ origin: '*' }));
+app.use(express.json());
+
+// Log every request to help debug connectivity
+app.use((req, res, next) => {
+  console.log(`${new Date().toLocaleTimeString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+
+// --- SMART FALLBACK ENGINE ---
+const generateSmartFallback = (inputs) => {
+  const budget = parseInt(inputs.budget) || 50000;
+  const isDigital = inputs.productType === 'Digital';
+  const multiplier = isDigital ? 1.2 : 0.8;
+  
+  return {
+    successScore: Math.floor(75 + Math.random() * 20),
+    growthScore: Math.floor(8 + Math.random() * 2),
+    revenueData: [
+      { name: "Q1", current: Math.floor(budget * 0.1), projected: Math.floor(budget * 0.15) },
+      { name: "Q2", current: Math.floor(budget * 0.2), projected: Math.floor(budget * 0.3) },
+      { name: "Q3", current: Math.floor(budget * 0.35), projected: Math.floor(budget * 0.5) },
+      { name: "Q4", current: Math.floor(budget * 0.6), projected: Math.floor(budget * 0.85) },
+      { name: "Q5", current: Math.floor(budget * 0.9), projected: Math.floor(budget * 1.2 * multiplier) }
+    ],
+    demandForecastData: [
+       { month: "Jan", demand: 300 }, { month: "Feb", demand: 450 }, { month: "Mar", demand: 600 },
+       { month: "Apr", demand: 850 }, { month: "May", demand: 1100 }, { month: "Jun", demand: 1450 }
+    ],
+    growthCurveData: Array.from({ length: 7 }, (_, i) => ({ day: i + 1, users: Math.floor(100 * Math.pow(1.5, i)) })),
+    heatmapData: [
+       { x: 15, y: 25, z: 200, risk: "Low", color: "#10b981" },
+       { x: 45, y: 55, z: 400, risk: "Mid", color: "#f59e0b" },
+       { x: 80, y: 85, z: 600, risk: "High", color: "#ef4444" }
+    ],
+    comparison: [
+       { name: "LLM", accuracy: "93%", latency: "1.2s", cost: "High", prob: "88%" },
+       { name: "XGBoost", accuracy: "84%", latency: "0.1s", cost: "Low", prob: "79%" },
+       { name: "LSTM", accuracy: "89%", latency: "0.4s", cost: "Mid", prob: "84%" }
+    ],
+    isSimulated: true
+  };
+};
+
+app.post('/api/analyze', async (req, res) => {
+  const { idea, audience, timeline, budget, model, compareModels } = req.body;
+  
+  try {
+    // 1. Check if key exists
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_api_key_here') {
+      console.warn('--- API KEY MISSING: Falling back to Smart Simulation ---');
+      return res.json({
+        id: `sim-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString(),
+        inputs: req.body,
+        metrics: generateSmartFallback(req.body),
+        isSimulated: true
+      });
+    }
+
+    // 2. Real AI Attempt
+    const aiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+    const prompt = `
+      As a Startup AI Analyst, analyze this:
+      Idea: ${idea} | Audience: ${audience} | Budget: ${budget}
+      Return ONLY a JSON object with: successScore (0-100), growthScore (0-10), 
+      revenueData (Q1-Q5 objects with 'name', 'current', 'projected'),
+      demandForecastData (Jan-Jun 'month'/'demand'),
+      growthCurveData (day 1-7 'day'/'users'),
+      heatmapData (3 risk points x/y/z/risk/color),
+      comparison (LLM/XGBoost/LSTM metrics).
+    `;
+
+    const result = await aiModel.generateContent(prompt);
+    const responseText = result.response.text();
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("Invalid AI JSON");
+    
+    const analysisResults = JSON.parse(jsonMatch[0]);
+
+    res.json({
+      id: Date.now().toString(),
+      timestamp: new Date().toLocaleTimeString(),
+      inputs: req.body,
+      metrics: analysisResults,
+      comparison: compareModels ? analysisResults.comparison : null,
+      isSimulated: false
+    });
+
+  } catch (error) {
+    // 3. SECURE FALLBACK: Resolve Error 429 (Quota) by switching to simulation
+    console.warn('--- AI CALL FAILED: Switching to Smart Simulation ---');
+    console.warn('Error Reason:', error.message || 'Unknown API Error');
+    
+    const fallbackResults = generateSmartFallback(req.body);
+    res.json({
+      id: `sim-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString(),
+      inputs: req.body,
+      metrics: fallbackResults,
+      comparison: compareModels ? fallbackResults.comparison : null,
+      isSimulated: true,
+      reason: error.status === 429 ? 'Quota Exceeded' : 'Model 404'
+    });
+  }
+});
+
+const PORT = process.env.PORT || 5001;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend server running on http://localhost:${PORT}`);
+});
