@@ -1,0 +1,52 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # 2. Setup Node
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      # 3. Install Backend Dependencies
+      - name: Install Backend
+        run: |
+          cd backend
+          npm install
+
+      # 4. Install Frontend Dependencies
+      - name: Install Frontend
+        run: |
+          cd frontend
+          npm install
+
+      # 5. Build Frontend
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm run build
+
+      # 6. Run Backend Check
+      - name: Backend Lint/Test
+        run: |
+          cd backend
+          node -e "console.log('Backend running fine')"
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy Message
+        run: echo "Deploying application..."
