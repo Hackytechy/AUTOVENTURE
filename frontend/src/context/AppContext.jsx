@@ -10,6 +10,19 @@ export const AppProvider = ({ children }) => {
   const [history, setHistory]                   = useState([]);
   const [currentAnalysis, setCurrentAnalysis]   = useState(null);
   const [globalDemandMultiplier, setGlobalDemandMultiplier] = useState(1);
+  const [multiAgentResult, setMultiAgentResult] = useState(() => {
+    const saved = localStorage.getItem('nexus_multiagent');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Persist multiAgentResult to localStorage whenever it changes
+  useEffect(() => {
+    if (multiAgentResult) {
+      localStorage.setItem('nexus_multiagent', JSON.stringify(multiAgentResult));
+    } else {
+      localStorage.removeItem('nexus_multiagent');
+    }
+  }, [multiAgentResult]);
 
   // ── On first mount: restore the logged-in user (not their history yet) ──
   useEffect(() => {
@@ -40,6 +53,7 @@ export const AppProvider = ({ children }) => {
     setHistory([]);
     setCurrentAnalysis(null);
     setGlobalDemandMultiplier(1);
+    setMultiAgentResult(null);
     localStorage.removeItem('nexus_user');
     // Do NOT remove the history key — user's data stays for next login
   };
@@ -90,6 +104,8 @@ export const AppProvider = ({ children }) => {
       loadAnalysis,
       globalDemandMultiplier,
       setGlobalDemandMultiplier,
+      multiAgentResult,
+      setMultiAgentResult,
     }}>
       {children}
     </AppContext.Provider>

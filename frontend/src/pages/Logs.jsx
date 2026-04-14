@@ -132,7 +132,8 @@ const Logs = () => {
               <span style={{ color: '#666', flexShrink: 0 }}>[{new Date(log.timestamp).toLocaleTimeString()}]</span>
               <span style={{ 
                 color: log.type === 'ERROR' ? '#ff5555' : 
-                       log.type === 'WARN' ? '#ffb86c' : '#50fa7b',
+                       log.type === 'WARN' ? '#ffb86c' : 
+                       log.type === 'MLOPS' ? '#8be9fd' : '#50fa7b',
                 fontWeight: 600,
                 width: '60px',
                 flexShrink: 0

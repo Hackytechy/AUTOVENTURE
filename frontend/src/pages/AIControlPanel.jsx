@@ -142,8 +142,12 @@ const AIControlPanel = () => {
       ]);
       const logsJson = await logsRes.json();
       const healthJson = await healthRes.json();
+      const mlopsRes = await fetch(`${API_BASE}/api/mlops`);
+      const mlopsJson = await mlopsRes.json();
+
       const llmOnly = (logsJson.logs || []).filter(l => l.source === 'AI_ENGINE');
       setLogs(llmOnly);
+      setStats(mlopsJson);
       setApiOnline(healthJson.status === 'OK');
     } catch {
       setApiOnline(false);
@@ -180,17 +184,14 @@ const AIControlPanel = () => {
   const engineHealth = !currentAnalysis ? 'grey'
     : isSimulated ? 'yellow' : 'green';
 
-  // ── DevOps stats ─────────────────────────────────────────────────────────
-  const totalReqs = logs.length;
-  const avgLatencyRaw = totalReqs > 0 ? logs.reduce((sum, log) => sum + (log.latencyMs || 0), 0) / logs.length : 0;
-  const avgLatency = totalReqs > 0 ? Math.round(avgLatencyRaw) : null;
-  const errorCount = logs.filter(log => log.success === false).length;
-  const errorRate = totalReqs > 0 ? `${((errorCount / totalReqs) * 100).toFixed(1)}%` : '0%';
-  const successRate = totalReqs > 0 ? `${(100 - (errorCount / totalReqs) * 100).toFixed(1)}%` : '100%';
+  const totalReqs = stats?.totalRequests || 0;
+  const avgLatency = stats?.avgLatency || null;
+  const successRate = stats?.successRate !== undefined ? `${stats.successRate}%` : '100.0%';
+  const driftDetected = stats?.drift || false;
   const breakdown = {
-    gemini: logs.filter(l => (l.model || '').toLowerCase().includes('gemini') || (l.model || '').toLowerCase().includes('gpt')).length,
-    groq: logs.filter(l => (l.model || '').toLowerCase().includes('llama')).length,
-    simulation: logs.filter(l => (l.model || '').toLowerCase().includes('sim')).length
+    openai: logs.filter(l => (l.model || '').toLowerCase().includes('gpt') || (l.model || '').toLowerCase().includes('openai')).length,
+    groq: logs.filter(l => (l.model || '').toLowerCase().includes('llama') || (l.model || '').toLowerCase().includes('groq')).length,
+    simulation: logs.filter(l => (l.model || '').toLowerCase().includes('sim') || (l.model || '').toLowerCase().includes('mock')).length
   };
 
   return (
@@ -257,36 +258,36 @@ const AIControlPanel = () => {
           <MetricCard
             icon={<Cpu size={13} />}
             label="Model Used"
-            value={engineUsed === '—' ? 'No analysis yet' : engineUsed.split('(')[0].trim()}
-            sub={modelName !== '—' ? modelName : undefined}
-            health={engineHealth}
-            tooltip="The AI engine that generated your last analysis result"
-            accent={isSimulated === false ? '#10b981' : isSimulated === true ? '#f59e0b' : undefined}
+            value={stats?.lastModelUsed === 'None' || !stats?.lastModelUsed ? 'No analysis yet' : stats.lastModelUsed}
+            sub={stats?.lastModelUsed !== 'None' ? 'Active telemetry' : undefined}
+            health={stats?.lastModelUsed !== 'None' ? 'green' : 'grey'}
+            tooltip="The exact LLM variant that generated your last MLOps analysis result"
+            accent={stats?.lastModelUsed !== 'None' ? '#10b981' : undefined}
           />
           <MetricCard
             icon={<Zap size={13} />}
             label="Prompt Version"
-            value={promptVer}
+            value={stats?.promptVersion || '—'}
             sub="Active schema version"
-            health={promptVer !== '—' ? 'green' : 'grey'}
-            tooltip="Version of the prompt template sent to the LLM — controls output structure"
+            health={stats?.promptVersion ? 'green' : 'grey'}
+            tooltip="Version of the prompt template sent to the LLM (Controls output json logic)"
           />
           <MetricCard
             icon={<Clock size={13} />}
             label="Last Run"
-            value={timestamp}
-            sub="Analysis timestamp"
-            health={currentAnalysis ? 'green' : 'grey'}
+            value={stats?.latest?.timestamp ? new Date(stats.latest.timestamp).toLocaleTimeString() : '—'}
+            sub="MLOps tracking stamp"
+            health={stats?.latest ? 'green' : 'grey'}
             tooltip="Time of the most recent analysis request"
           />
           <MetricCard
             icon={<Activity size={13} />}
             label="Response Latency"
-            value={latencyMs ? `${latencyMs}ms` : '—'}
-            sub={latencyMs ? (latencyMs < 1200 ? 'Fast response' : latencyMs < 3000 ? 'Moderate' : 'Slow — check API') : 'No data yet'}
-            health={latencyMs ? latencyHealth(latencyMs) : 'grey'}
+            value={stats?.latest?.latency ? `${stats.latest.latency}ms` : '—'}
+            sub={stats?.latest?.latency ? (stats.latest.latency < 1200 ? 'Fast response' : stats.latest.latency < 3000 ? 'Moderate' : 'Slow — check API') : 'No data yet'}
+            health={stats?.latest?.latency ? latencyHealth(stats.latest.latency) : 'grey'}
             tooltip="Time taken by the AI engine to return a complete response"
-            accent={latencyMs ? latencyColor(latencyMs) : undefined}
+            accent={stats?.latest?.latency ? latencyColor(stats.latest.latency) : undefined}
           />
           <MetricCard
             icon={<CheckCircle size={13} />}
@@ -409,8 +410,7 @@ const AIControlPanel = () => {
           </Tooltip>
         </div>
 
-        {/* Top metrics row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
           <MetricCard
             icon={<Wifi size={13} />}
             label="API Status"
@@ -434,17 +434,26 @@ const AIControlPanel = () => {
             value={avgLatency ? `${avgLatency}ms` : '—'}
             sub={avgLatency ? (avgLatency < 1200 ? 'Excellent' : avgLatency < 2500 ? 'Good' : 'Needs attention') : 'No data yet'}
             health={avgLatency ? latencyHealth(avgLatency) : 'grey'}
-            tooltip="Average response time across all AI engine calls — includes Gemini, Groq, and simulation"
+            tooltip="Average response time across all AI engine calls"
             accent={avgLatency ? latencyColor(avgLatency) : undefined}
           />
           <MetricCard
+            icon={<CheckCircle size={13} />}
+            label="Success Rate"
+            value={successRate}
+            sub="LLM Generation"
+            health={parseFloat(successRate) > 95 ? 'green' : parseFloat(successRate) > 80 ? 'yellow' : 'red'}
+            tooltip="Percentage of analysis requests that succeeded"
+            accent={parseFloat(successRate) > 95 ? '#10b981' : parseFloat(successRate) > 80 ? '#f59e0b' : '#ef4444'}
+          />
+          <MetricCard
             icon={<AlertTriangle size={13} />}
-            label="Error Rate"
-            value={errorRate}
-            sub={`${successRate} success rate`}
-            health={parseFloat(errorRate) < 5 ? 'green' : parseFloat(errorRate) < 20 ? 'yellow' : 'red'}
-            tooltip="Percentage of analysis requests that failed (API errors, invalid JSON, quota exceeded)"
-            accent={parseFloat(errorRate) < 5 ? '#10b981' : parseFloat(errorRate) < 20 ? '#f59e0b' : '#ef4444'}
+            label="Drift Detection"
+            value={driftDetected ? 'Drift Warn' : 'Stable'}
+            sub={driftDetected ? 'Latency > 4s' : 'Nominal bounds'}
+            health={driftDetected ? 'red' : 'green'}
+            tooltip="Analyzes last 5 requests. Warns if API response latency drifts abnormally high."
+            accent={driftDetected ? '#ef4444' : '#10b981'}
           />
         </div>
 
@@ -458,7 +467,7 @@ const AIControlPanel = () => {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
             {[
-              { label: 'Gemini AI', count: breakdown.gemini, color: '#6366f1', icon: '🔵', tooltip: 'Primary AI — Google Gemini 2.0 Flash Lite' },
+              { label: 'OpenAI (GPT)', count: breakdown.openai, color: '#6366f1', icon: '🔵', tooltip: 'Primary AI — OpenAI GPT-4o-mini' },
               { label: 'Groq (Llama 3)', count: breakdown.groq, color: '#f59e0b', icon: '🟡', tooltip: 'Fallback AI — Llama 3 70B via Groq API' },
               { label: 'Smart Simulation', count: breakdown.simulation, color: '#10b981', icon: '🟠', tooltip: 'Rule-based fallback when both AI keys are unavailable/quota exceeded' },
             ].map(e => {

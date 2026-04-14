@@ -26,18 +26,65 @@ const PROMPT_VERSION = 'v1.4';
 // 2. LLM LOGGING LAYER  (in-memory, capped at 500 entries)
 // ════════════════════════════════════════════════════════════════════════════
 const llmLogs = [];
+let mlopsMetrics = [];
+let driftDetected = false;
 
 const logLLMRequest = ({ inputs, model, modelName, success, latencyMs, error, engine }) => {
+  const actualModel = modelName || model || 'LLM';
+  
+  // 1. Standard Engine Log
   llmLogs.push({
     type: success ? "INFO" : "ERROR",
     source: "AI_ENGINE",
     message: success ? `Response generated (${latencyMs}ms)` : (error || "Unknown Error"),
     timestamp: Date.now(),
-    model: modelName || model || 'LLM',
+    model: actualModel,
     latencyMs: latencyMs || 0,
     success: success
   });
-  if (llmLogs.length > 50) llmLogs.shift();
+
+  // 2. Specialized MLOps Log
+  llmLogs.push({
+    type: "MLOPS",
+    source: "MLOPS_TRACKER",
+    message: `Model ${actualModel} responded in ${latencyMs || 0}ms`,
+    timestamp: Date.now(),
+    model: actualModel,
+    latencyMs: latencyMs || 0,
+    success: success
+  });
+
+  // 3. Track MLOps Global Array
+  mlopsMetrics.push({
+    modelUsed: actualModel,
+    promptVersion: PROMPT_VERSION,
+    latency: latencyMs || 0,
+    status: success ? "OK" : "FAIL",
+    timestamp: Date.now(),
+    confidenceScore: null // Derived natively eventually
+  });
+
+  if (mlopsMetrics.length > 50) mlopsMetrics.shift();
+
+  // 4. Drift Analysis (Rolling Window)
+  if (mlopsMetrics.length >= 5) {
+    const last5 = mlopsMetrics.slice(-5);
+    const avgLatency = last5.reduce((sum, log) => sum + log.latency, 0) / 5;
+    
+    if (avgLatency > 4000) {
+      driftDetected = true;
+      llmLogs.push({
+        type: "WARN",
+        source: "MLOPS_ALERT",
+        message: "⚠️ Drift detected: latency increasing",
+        timestamp: Date.now()
+      });
+    } else {
+      driftDetected = false;
+    }
+  }
+
+  if (llmLogs.length > 100) llmLogs.shift();
 };
 
 const isValidKey = (key) =>
@@ -352,6 +399,12 @@ const executeTieredLLM = async (prompt, inputs) => {
     } catch (err) {
       console.error('⚠️ [T1] Groq 70B Failed:', err.message);
       logLLMRequest({ inputs, model: 'Groq', engine: 'groq', modelName: 'Groq', success: false, latencyMs: Date.now() - requestStart, error: err.message });
+      llmLogs.push({
+        type: "INFO",
+        source: "AI_ENGINE",
+        message: "Retrying failed API request",
+        timestamp: Date.now()
+      });
     }
   }
 
@@ -365,11 +418,23 @@ const executeTieredLLM = async (prompt, inputs) => {
     } catch (err) {
       console.error('⚠️ [T2] OpenAI Failed:', err.message);
       logLLMRequest({ inputs, model: 'OpenAI', engine: 'openai', modelName: 'OpenAI', success: false, latencyMs: Date.now() - requestStart, error: err.message });
+      llmLogs.push({
+        type: "INFO",
+        source: "AI_ENGINE",
+        message: "Retrying failed API request",
+        timestamp: Date.now()
+      });
     }
   }
 
   // Tier 3: Simulation Fallback (Ensures project always works for demonstration)
   console.warn('🔄 [T3] All AI Tiers Failed — Switching to Simulation Mode...');
+  llmLogs.push({
+    type: "INFO",
+    source: "AI_ENGINE",
+    message: "Fallback model executed",
+    timestamp: Date.now()
+  });
   return generateMockResponse(inputs);
 };
 
@@ -455,6 +520,46 @@ app.get('/api/logs/stats', (req, res) => {
   });
 });
 
+app.get('/api/mlops', (req, res) => {
+  const totalRequests = mlopsMetrics.length;
+  const successes = mlopsMetrics.filter(m => m.status === 'OK').length;
+  const successRate = totalRequests > 0 ? (successes / totalRequests) * 100 : 100;
+  
+  const avgLatency = totalRequests > 0 
+    ? mlopsMetrics.reduce((sum, m) => sum + m.latency, 0) / totalRequests 
+    : 0;
+
+  res.json({
+    latest: mlopsMetrics.length > 0 ? mlopsMetrics[mlopsMetrics.length - 1] : null,
+    avgLatency: Math.round(avgLatency),
+    successRate: successRate.toFixed(1),
+    totalRequests,
+    lastModelUsed: mlopsMetrics.length > 0 ? mlopsMetrics[mlopsMetrics.length - 1].modelUsed : "None",
+    promptVersion: PROMPT_VERSION,
+    drift: driftDetected
+  });
+});
+
+app.get('/api/mlops/history', (req, res) => {
+  res.json(mlopsMetrics);
+});
+
+let devOpsAlerts = [];
+
+app.get('/api/system-health', (req, res) => {
+  const cpu = process.cpuUsage();
+  const memory = process.memoryUsage();
+  res.json({
+    cpuUsage: ((cpu.user + cpu.system) / 1000000).toFixed(2),
+    memoryUsage: (memory.heapUsed / 1024 / 1024).toFixed(2),
+    uptime: process.uptime().toFixed(0)
+  });
+});
+
+app.get('/api/alerts', (req, res) => {
+  res.json(devOpsAlerts);
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 // POST /api/analyze — MAIN ENDPOINT
 // ════════════════════════════════════════════════════════════════════════════
@@ -483,6 +588,23 @@ app.post('/api/analyze', async (req, res) => {
     // 2. RUN LLM ENGINE (Tiered API)
     const llmRes = await executeTieredLLM(prompt, req.body);
     const llmData = llmRes.data || {};
+    
+    // Dynamic Alert Engine Checks
+    if (llmRes.latency && llmRes.latency > 4000) {
+      devOpsAlerts.unshift({
+        type: "WARNING",
+        message: "High latency detected",
+        time: new Date().toLocaleTimeString()
+      });
+    }
+    if (llmRes.success === false) {
+      devOpsAlerts.unshift({
+        type: "ERROR",
+        message: "AI request failed",
+        time: new Date().toLocaleTimeString()
+      });
+    }
+    if (devOpsAlerts.length > 20) devOpsAlerts.pop();
 
     // 3. MERGE RESULTS (Hybrid Mapping)
     const hybridResult = {
