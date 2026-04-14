@@ -263,10 +263,10 @@ const Dashboard = () => {
             <h3 style={{ margin: 0 }}>Specialized Model Findings</h3>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: metrics.explanation.modelPersonaOutput.featureImportance && metrics.explanation.modelPersonaOutput.timeSeriesPattern ? '1fr 1fr' : '1fr', gap: '2rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: Array.isArray(metrics.explanation?.modelPersonaOutput?.featureImportance) && metrics.explanation?.modelPersonaOutput?.timeSeriesPattern ? '1fr 1fr' : '1fr', gap: '2rem' }}>
             
             {/* XGBoost / Hybrid Feature Importance */}
-            {metrics.explanation.modelPersonaOutput.featureImportance && (
+            {Array.isArray(metrics.explanation?.modelPersonaOutput?.featureImportance) && (
               <div>
                 <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                    <Zap size={16} /> Feature Importance (Numerical Reasoning)
@@ -294,7 +294,7 @@ const Dashboard = () => {
             )}
 
             {/* LSTM / Hybrid Time Series Pattern */}
-            {metrics.explanation.modelPersonaOutput.timeSeriesPattern && (
+            {metrics.explanation?.modelPersonaOutput?.timeSeriesPattern && (
               <div>
                 <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                    <TrendingUp size={16} /> Temporal Pattern Analysis (Sequential)

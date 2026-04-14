@@ -142,7 +142,8 @@ const AIControlPanel = () => {
       ]);
       const logsJson = await logsRes.json();
       const healthJson = await healthRes.json();
-      setLogs(logsJson.logs || []);
+      const llmOnly = (logsJson.logs || []).filter(l => l.source === 'AI_ENGINE');
+      setLogs(llmOnly);
       setApiOnline(healthJson.status === 'OK');
     } catch {
       setApiOnline(false);
@@ -181,9 +182,9 @@ const AIControlPanel = () => {
 
   // ── DevOps stats ─────────────────────────────────────────────────────────
   const totalReqs = logs.length;
-  const avgLatencyRaw = totalReqs > 0 ? logs.reduce((sum, log) => sum + (log.latency || 0), 0) / logs.length : 0;
+  const avgLatencyRaw = totalReqs > 0 ? logs.reduce((sum, log) => sum + (log.latencyMs || 0), 0) / logs.length : 0;
   const avgLatency = totalReqs > 0 ? Math.round(avgLatencyRaw) : null;
-  const errorCount = logs.filter(log => log.status === 'failure').length;
+  const errorCount = logs.filter(log => log.success === false).length;
   const errorRate = totalReqs > 0 ? `${((errorCount / totalReqs) * 100).toFixed(1)}%` : '0%';
   const successRate = totalReqs > 0 ? `${(100 - (errorCount / totalReqs) * 100).toFixed(1)}%` : '100%';
   const breakdown = {
@@ -371,9 +372,9 @@ const AIControlPanel = () => {
                   >
                     <td style={{ padding: '0.7rem 0.75rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <HealthDot status={log.status === 'success' ? 'green' : 'red'} />
-                        <span style={{ color: log.status === 'success' ? '#10b981' : '#ef4444', fontWeight: 600 }}>
-                          {log.status === 'success' ? 'OK' : 'FAIL'}
+                        <HealthDot status={log.success ? 'green' : 'red'} />
+                        <span style={{ color: log.success ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                          {log.success ? 'OK' : 'FAIL'}
                         </span>
                       </div>
                     </td>
@@ -381,8 +382,8 @@ const AIControlPanel = () => {
                       {log.model || '—'}
                     </td>
                     <td style={{ padding: '0.7rem 0.75rem' }}>
-                      <span style={{ color: latencyColor(log.latency), fontWeight: 600 }}>
-                        {log.latency ? `${log.latency}ms` : '—'}
+                      <span style={{ color: latencyColor(log.latencyMs), fontWeight: 600 }}>
+                        {log.latencyMs ? `${log.latencyMs}ms` : '—'}
                       </span>
                     </td>
                     <td style={{ padding: '0.7rem 0.75rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>

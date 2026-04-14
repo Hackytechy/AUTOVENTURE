@@ -1,46 +1,34 @@
 import { useState, useEffect, useRef } from 'react';
-import { Terminal, Search, Trash2, StopCircle, PlayCircle, Download } from 'lucide-react';
+import { Terminal, Search, Trash2, StopCircle, PlayCircle, Download, Filter } from 'lucide-react';
+
+const API_BASE = process.env.NODE_ENV === "production" ? "https://auto-venture-website.onrender.com" : "http://localhost:5001";
 
 const Logs = () => {
   const [logs, setLogs] = useState([]);
-  const [filter, setFilter] = useState('');
+  const [filterText, setFilterText] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [isPaused, setIsPaused] = useState(false);
+  const [loading, setLoading] = useState(true);
   const scrollRef = useRef(null);
 
-  // Simulation logic for live system logs
-  useEffect(() => {
+  const fetchLogs = async () => {
     if (isPaused) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/logs`);
+      const data = await res.json();
+      if (data.success && data.logs) {
+         setLogs(data.logs);
+      }
+    } catch(err) {
+      console.error('Log fetch error', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const logTypes = ['INFO', 'WARN', 'ERROR', 'DEBUG', 'SYSTEM'];
-    const services = ['AI_ENGINE', 'SERVER', 'AUTH_GATEWAY', 'ML_PIPELINE', 'DATA_LAYER'];
-    const actions  = [
-      'Token processing...', 
-      'Embedding generated', 
-      'Vector search completed', 
-      'User authenticated', 
-      'Heatmap updated', 
-      'Cache hit: Analysis-ID-3921',
-      'API Request: /api/analyze',
-      'Model switch: llama-3.3-70b-versatile',
-      'Memory cleanup: 1.2MB freed'
-    ];
-
-    const generateLog = () => {
-      const type = logTypes[Math.floor(Math.random() * logTypes.length)];
-      const service = services[Math.floor(Math.random() * services.length)];
-      const msg = actions[Math.floor(Math.random() * actions.length)];
-      const id = Date.now() + Math.random();
-
-      setLogs(prev => [...prev, {
-        id,
-        timestamp: new Date().toLocaleTimeString(),
-        type,
-        service,
-        msg
-      }].slice(-100)); // Keep last 100 logs
-    };
-
-    const interval = setInterval(generateLog, 1500 + Math.random() * 2000);
+  useEffect(() => {
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 2000); // 2 second auto-refresh
     return () => clearInterval(interval);
   }, [isPaused]);
 
@@ -51,11 +39,15 @@ const Logs = () => {
     }
   }, [logs]);
 
-  const filteredLogs = logs.filter(l => 
-    l.msg.toLowerCase().includes(filter.toLowerCase()) || 
-    l.type.toLowerCase().includes(filter.toLowerCase()) ||
-    l.service.toLowerCase().includes(filter.toLowerCase())
-  );
+  const filteredLogs = logs.filter(l => {
+    const textMatch = (l.message || l.msg || '').toLowerCase().includes(filterText.toLowerCase()) || 
+                      (l.type || '').toLowerCase().includes(filterText.toLowerCase()) ||
+                      (l.source || l.service || '').toLowerCase().includes(filterText.toLowerCase());
+    const statusMatch = statusFilter === 'ALL' ? true : 
+                        statusFilter === 'SUCCESS' ? l.type === 'INFO' : 
+                        l.type === 'ERROR';
+    return textMatch && statusMatch;
+  });
 
   return (
     <div className="logs-page animate-fade-in" style={{ height: 'calc(100vh - 4rem)', display: 'flex', flexDirection: 'column', padding: '1.5rem', gap: '1rem' }}>
@@ -89,10 +81,22 @@ const Logs = () => {
             <input 
               type="text" 
               placeholder="Filter logs by message, service or level..." 
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
               style={{ width: '100%', padding: '0.6rem 1rem 0.6rem 2.5rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
             />
+         </div>
+         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-primary)', padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+            <Filter size={14} color="var(--text-tertiary)" />
+            <select 
+               value={statusFilter} 
+               onChange={(e) => setStatusFilter(e.target.value)}
+               style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', outline: 'none', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+               <option value="ALL">All Logs</option>
+               <option value="SUCCESS">Success Only</option>
+               <option value="ERROR">Errors Only</option>
+            </select>
          </div>
          <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', background: 'var(--bg-primary)', padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
             {filteredLogs.length} Entries Shown
@@ -114,27 +118,29 @@ const Logs = () => {
           lineHeight: 1.6
         }}
       >
-        {filteredLogs.length === 0 ? (
+        {loading && logs.length === 0 ? (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
-            No logs currently in buffer...
+            Loading logs from backend stream...
+          </div>
+        ) : filteredLogs.length === 0 ? (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+            No logs yet. Try running an AI analysis to see requests flow in.
           </div>
         ) : (
-          filteredLogs.map(log => (
-            <div key={log.id} style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid #222', padding: '0.2rem 0' }}>
-              <span style={{ color: '#666', flexShrink: 0 }}>[{log.timestamp}]</span>
+          filteredLogs.map((log, idx) => (
+            <div key={`${log.timestamp}-${idx}`} style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid #222', padding: '0.4rem 0' }}>
+              <span style={{ color: '#666', flexShrink: 0 }}>[{new Date(log.timestamp).toLocaleTimeString()}]</span>
               <span style={{ 
                 color: log.type === 'ERROR' ? '#ff5555' : 
-                      log.type === 'WARN'  ? '#ffb86c' : 
-                      log.type === 'INFO'  ? '#50fa7b' : 
-                      log.type === 'DEBUG' ? '#bd93f9' : '#8be9fd',
+                       log.type === 'WARN' ? '#ffb86c' : '#50fa7b',
                 fontWeight: 600,
                 width: '60px',
                 flexShrink: 0
               }}>
                 {log.type}
               </span>
-              <span style={{ color: '#ff79c6', fontWeight: 500, flexShrink: 0 }}>[{log.service}]</span>
-              <span style={{ color: '#f8f8f2' }}>{log.msg}</span>
+              <span style={{ color: '#ff79c6', fontWeight: 500, flexShrink: 0 }}>[{log.source || log.service}]</span>
+              <span style={{ color: '#f8f8f2' }}>{log.message || log.msg}</span>
             </div>
           ))
         )}

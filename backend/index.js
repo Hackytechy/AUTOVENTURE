@@ -29,22 +29,15 @@ const llmLogs = [];
 
 const logLLMRequest = ({ inputs, model, modelName, success, latencyMs, error, engine }) => {
   llmLogs.push({
-    id: llmLogs.length + 1,
-    timestamp: new Date().toISOString(),
-    promptVersion: PROMPT_VERSION,
-    model,      // e.g. 'LLM'
-    engine,     // 'gemini' | 'groq' | 'openai'
-    modelName,  // e.g. 'gemini-1.5-flash-latest'
-    idea: (inputs.idea || '').substring(0, 60),
-    field: inputs.field || 'N/A',
-    budget: inputs.budget || 'N/A',
-    currency: inputs.currency || 'USD',
-    success,
-    isSimulated: false,
-    latencyMs,
-    error: error || null,
+    type: success ? "INFO" : "ERROR",
+    source: "AI_ENGINE",
+    message: success ? `Response generated (${latencyMs}ms)` : (error || "Unknown Error"),
+    timestamp: Date.now(),
+    model: modelName || model || 'LLM',
+    latencyMs: latencyMs || 0,
+    success: success
   });
-  if (llmLogs.length > 500) llmLogs.shift();
+  if (llmLogs.length > 50) llmLogs.shift();
 };
 
 const isValidKey = (key) =>
@@ -438,15 +431,9 @@ app.get('/api/github-actions', async (req, res) => {
 });
 
 app.get('/api/logs', (req, res) => {
-  const latestLogs = [...llmLogs].reverse().slice(0, 20).map(l => ({
-    timestamp: l.timestamp,
-    model: l.modelName || l.model || 'Unknown',
-    latency: l.latencyMs || 0,
-    status: l.success ? 'success' : 'failure'
-  }));
   res.json({
     success: true,
-    logs: latestLogs,
+    logs: [...llmLogs].reverse()
   });
 });
 
@@ -478,6 +465,14 @@ app.post('/api/analyze', async (req, res) => {
   const { compareModels } = req.body;
   const prompt = buildPrompt(req.body);
   const requestStart = Date.now();
+
+  llmLogs.push({
+    type: "INFO",
+    source: "API",
+    message: "Received request → /api/analyze",
+    timestamp: Date.now()
+  });
+  if (llmLogs.length > 50) llmLogs.shift();
 
   try {
     // 1. RUN LOCAL ENGINES (Instant)

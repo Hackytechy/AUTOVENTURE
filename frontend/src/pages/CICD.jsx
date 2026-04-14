@@ -38,6 +38,11 @@ const CICD = () => {
       return () => clearInterval(interval);
    }, []);
 
+   const totalRuns = pipelines.length;
+   const successRuns = pipelines.filter(p => p.conclusion === 'success').length;
+   const successRate = totalRuns > 0 ? Math.round((successRuns / totalRuns) * 100) + '%' : 'N/A';
+   const lastDeployment = totalRuns > 0 ? new Date(pipelines[0].created_at).toLocaleString() : 'N/A';
+
    return (
       <div className="cicd-page animate-fade-in" style={{ padding: '2rem' }}>
 
@@ -66,31 +71,24 @@ const CICD = () => {
          {/* Top row: Metrics */}
          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
             <div style={{ background: 'var(--bg-secondary)', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-               <Server color="var(--accent-primary)" size={40} />
+               <Layers color="var(--accent-primary)" size={40} />
                <div>
-                  <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>System Status</p>
-                  <h3 style={{ margin: 0, fontSize: '1.5rem' }}>Healthy</h3>
+                  <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>Total Runs</p>
+                  <h3 style={{ margin: 0, fontSize: '1.5rem' }}>{loading && totalRuns === 0 ? '-' : totalRuns}</h3>
+               </div>
+            </div>
+            <div style={{ background: 'var(--bg-secondary)', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+               <CheckCircle color="#50fa7b" size={40} />
+               <div>
+                  <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>Success Rate</p>
+                  <h3 style={{ margin: 0, fontSize: '1.5rem' }}>{loading && totalRuns === 0 ? '-' : successRate}</h3>
                </div>
             </div>
             <div style={{ background: 'var(--bg-secondary)', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
                <Clock color="#bd93f9" size={40} />
                <div>
-                  <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>Mean Uptime</p>
-                  <h3 style={{ margin: 0, fontSize: '1.5rem' }}>99.98%</h3>
-               </div>
-            </div>
-            <div style={{ background: 'var(--bg-secondary)', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-               <Cpu color="#50fa7b" size={40} />
-               <div>
-                  <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>Resource Load</p>
-                  <h3 style={{ margin: 0, fontSize: '1.5rem' }}>34% <span style={{ fontSize: '0.8rem', color: '#50fa7b' }}>↓ 4%</span></h3>
-               </div>
-            </div>
-            <div style={{ background: 'var(--bg-secondary)', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-               <Shield color="#ffb86c" size={40} />
-               <div>
-                  <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>Security Patch</p>
-                  <h3 style={{ margin: 0, fontSize: '1.5rem' }}>Current</h3>
+                  <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>Last Deployment</p>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{loading && totalRuns === 0 ? '-' : lastDeployment}</h3>
                </div>
             </div>
          </div>
@@ -160,41 +158,6 @@ const CICD = () => {
                      </tbody>
                   </table>
                )}
-            </div>
-         </section>
-
-         {/* Orchestration Map snippet */}
-         <section style={{ marginTop: '2.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-            <div style={{ background: 'var(--bg-secondary)', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
-               <h3 style={{ marginTop: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Layers size={16} /> Cluster Allocation
-               </h3>
-               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.5rem' }}>
-                  {[
-                     { label: 'Cloud-1 (Virginia)', val: 80, color: 'var(--accent-primary)' },
-                     { label: 'Cloud-2 (Tokyo)', val: 45, color: '#bd93f9' },
-                     { label: 'Edge-1 (London)', val: 92, color: '#ffb86c' }
-                  ].map(c => (
-                     <div key={c.label}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.4rem' }}>
-                           <span>{c.label}</span>
-                           <span>{c.val}%</span>
-                        </div>
-                        <div style={{ height: '6px', width: '100%', background: 'var(--bg-primary)', borderRadius: '10px' }}>
-                           <div style={{ height: '100%', width: `${c.val}%`, background: c.color, borderRadius: '10px', transition: 'width 1s ease-in-out' }}></div>
-                        </div>
-                     </div>
-                  ))}
-               </div>
-            </div>
-            <div style={{ background: 'var(--bg-secondary)', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-               <div style={{ padding: '1.5rem', borderRadius: '50%', background: 'rgba(80,250,123,0.1)', color: '#50fa7b', marginBottom: '1rem' }}>
-                  <CheckCircle size={40} />
-               </div>
-               <h3 style={{ margin: 0 }}>Auto-Optimization Active</h3>
-               <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem', maxWidth: '300px', marginTop: '0.5rem' }}>
-                  NexusAI is currently balancing workloads across 3 global inference clusters for 0% downtime.
-               </p>
             </div>
          </section>
       </div>
