@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UploadCloud, File, X, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { simulateAnalysis } from '../services/aiEngine';
@@ -16,15 +16,14 @@ const InputAnalysis = () => {
     businessType: '',
     field: '',
     productType: '',
-    model: 'LLM',
-    compareModels: false
+    model: 'HYBRID',      // Always Hybrid — hardcoded, not user-configurable
+    compareModels: false  // Disabled; model comparison still works via Model Comparison page
   });
 
-  const [uploadedFile, setUploadedFile] = useState(null);
   const [fieldSearch, setFieldSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+
   const fields = ['Technology', 'FinTech', 'Retail', 'Healthcare', 'EdTech', 'E-commerce', 'SaaS', 'Real Estate', 'Logistics'];
   const filteredFields = fields.filter(f => f.toLowerCase().includes(fieldSearch.toLowerCase()));
 
@@ -36,28 +35,16 @@ const InputAnalysis = () => {
     }));
   };
 
-  const handleDocumentUpload = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploadedFile(e.target.files[0]);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Direct call to the real Node.js/Express backend
-      const results = await simulateAnalysis(formData);
+      const results = await simulateAnalysis({ ...formData, model: 'HYBRID' });
       setCurrentAnalysis(results);
       addAnalysisToHistory(results);
-      
-      if (formData.compareModels) {
-        navigate('/model-comparison');
-      } else {
-        navigate('/dashboard');
-      }
+      navigate('/dashboard');
     } catch (err) {
       console.error('Analysis failed:', err);
       setError(err.message || 'Failed to connect to the AI engine. Ensure the server is running and your API key is valid.');
@@ -70,14 +57,29 @@ const InputAnalysis = () => {
     <div className="container animate-fade-in" style={{ padding: '2rem', maxWidth: '800px' }}>
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>Configure Analysis Request</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Provide the details of your startup idea and select the analysis model to proceed.</p>
+        <p style={{ color: 'var(--text-secondary)' }}>
+          Our AI automatically uses a hybrid intelligence pipeline for best results.
+        </p>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+          marginTop: '0.5rem',
+          fontSize: '0.78rem', fontWeight: 600,
+          color: 'var(--accent-primary)',
+          background: 'rgba(99,102,241,0.1)',
+          border: '1px solid rgba(99,102,241,0.25)',
+          padding: '0.3rem 0.75rem',
+          borderRadius: '999px'
+        }}>
+          <Sparkles size={13} />
+          ⚡ Hybrid AI Engine — LLM + XGBoost + LSTM
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="glass-panel" style={{ padding: '2rem' }}>
         <div className="input-group">
           <label className="input-label">Idea Description</label>
-          <textarea 
-            className="input-field" 
+          <textarea
+            className="input-field"
             name="idea"
             rows="4"
             placeholder="Describe your startup idea, core problem, and proposed solution..."
@@ -89,8 +91,8 @@ const InputAnalysis = () => {
 
         <div className="input-group">
           <label className="input-label">Target Audience</label>
-          <textarea 
-            className="input-field" 
+          <textarea
+            className="input-field"
             name="audience"
             rows="2"
             placeholder="Who are the primary users or customers?"
@@ -102,9 +104,9 @@ const InputAnalysis = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
           <div className="input-group" style={{ marginBottom: 0 }}>
             <label className="input-label">Timeline</label>
-            <input 
-              type="text" 
-              className="input-field" 
+            <input
+              type="text"
+              className="input-field"
               name="timeline"
               placeholder="e.g. 18 months, 2.5 years"
               value={formData.timeline}
@@ -121,9 +123,9 @@ const InputAnalysis = () => {
                 <option value="GBP">£ GBP</option>
                 <option value="INR">₹ INR</option>
               </select>
-              <input 
-                type="text" 
-                className="input-field" 
+              <input
+                type="text"
+                className="input-field"
                 name="budget"
                 placeholder="e.g. 500k, 1M"
                 value={formData.budget}
@@ -148,9 +150,9 @@ const InputAnalysis = () => {
 
           <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
             <label className="input-label">Field of Area</label>
-            <input 
-              type="text" 
-              className="input-field" 
+            <input
+              type="text"
+              className="input-field"
               placeholder="Search field..."
               value={fieldSearch}
               onChange={(e) => {
@@ -160,19 +162,15 @@ const InputAnalysis = () => {
             />
             {fieldSearch && filteredFields.length > 0 && formData.field !== filteredFields[0] && (
               <div style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                right: 0,
+                position: 'absolute', top: '100%', left: 0, right: 0,
                 background: 'var(--bg-secondary)',
                 border: '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-md)',
-                marginTop: '0.5rem',
-                zIndex: 10,
+                marginTop: '0.5rem', zIndex: 10,
                 boxShadow: 'var(--shadow-lg)'
               }}>
                 {filteredFields.map(f => (
-                  <div 
+                  <div
                     key={f}
                     style={{ padding: '0.75rem 1rem', cursor: 'pointer', transition: 'background 0.2s' }}
                     onClick={() => {
@@ -200,93 +198,11 @@ const InputAnalysis = () => {
           </div>
         </div>
 
-        <div className="input-group">
-          <label className="input-label">Upload Detailed Concept/Pitch Deck</label>
-          <div style={{
-            border: '2px dashed var(--border-color)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '2rem',
-            textAlign: 'center',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            background: 'var(--bg-tertiary)'
-          }}
-          onClick={() => document.getElementById('file-upload').click()}
-          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
-          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
-          >
-            {uploadedFile ? (
-               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                  <File color="var(--accent-primary)" />
-                  <span style={{ fontWeight: 500 }}>{uploadedFile.name}</span>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); setUploadedFile(null); }} style={{ padding: '4px', borderRadius: '50%', background: 'var(--bg-secondary)' }}>
-                     <X size={14} color="var(--text-secondary)" />
-                  </button>
-               </div>
-            ) : (
-              <>
-                <UploadCloud size={32} color="var(--text-secondary)" style={{ margin: '0 auto 1rem' }} />
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Click or drag file to this area to upload</p>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>Supports PDF, PPTX, DOCX (Max 20MB)</p>
-              </>
-            )}
-            <input type="file" id="file-upload" style={{ display: 'none' }} onChange={handleDocumentUpload} />
-          </div>
-        </div>
-
-        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
-          <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>Processing Configuration</h3>
-          
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              {['LLM', 'XGBoost', 'LSTM', 'HYBRID'].map(m => (
-                <label key={m} style={{ 
-                  display: 'flex', alignItems: 'center', gap: '0.5rem', 
-                  padding: '0.75rem 1.25rem', 
-                  borderRadius: 'var(--radius-md)', 
-                  border: formData.model === m ? '1px solid var(--accent-primary)' : '1px solid var(--border-color)',
-                  background: formData.model === m ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}>
-                  <input type="radio" name="model" value={m} checked={formData.model === m} onChange={handleChange} style={{ accentColor: 'var(--accent-primary)' }} />
-                  <span style={{ fontWeight: 500 }}>{m}</span>
-                </label>
-              ))}
-            </div>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Compare Model Usage</span>
-              <div style={{
-                width: '44px',
-                height: '24px',
-                background: formData.compareModels ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                borderRadius: '12px',
-                position: 'relative',
-                transition: 'background 0.3s'
-              }}>
-                <div style={{
-                  width: '20px',
-                  height: '20px',
-                  background: 'white',
-                  borderRadius: '50%',
-                  position: 'absolute',
-                  top: '2px',
-                  left: formData.compareModels ? '22px' : '2px',
-                  transition: 'left 0.3s'
-                }} />
-              </div>
-              <input type="checkbox" name="compareModels" checked={formData.compareModels} onChange={handleChange} style={{ display: 'none' }} />
-            </label>
-          </div>
-        </div>
-
         {error && (
-          <div style={{ 
-            marginTop: '1.5rem', 
-            padding: '1rem', 
-            borderRadius: 'var(--radius-md)', 
-            background: 'rgba(220, 38, 38, 0.1)', 
+          <div style={{
+            marginTop: '1.5rem', padding: '1rem',
+            borderRadius: 'var(--radius-md)',
+            background: 'rgba(220, 38, 38, 0.1)',
             border: '1px solid var(--accent-danger)',
             color: 'var(--accent-danger)',
             fontSize: '0.9rem'

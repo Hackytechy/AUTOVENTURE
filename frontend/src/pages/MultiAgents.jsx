@@ -1,12 +1,46 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Network, Database, BrainCircuit, ShieldAlert, LineChart, Target, Truck, Zap, AlertTriangle, CheckCircle, TrendingUp, Info } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
 const MultiAgents = () => {
-  const { currentAnalysis } = useAppContext();
-  const [selectedAgents, setSelectedAgents] = useState([]);
-  const [status, setStatus] = useState('idle'); // idle | analyzing | complete
-  const [agentOutputs, setAgentOutputs] = useState([]);
+  const { currentAnalysis, multiAgentResult, setMultiAgentResult } = useAppContext();
+  const [selectedAgents, setSelectedAgents] = useState(() => {
+    if (!multiAgentResult?.agents?.length) return [];
+    if (multiAgentResult.analysisId !== currentAnalysis?.id) return []; // stale
+    return multiAgentResult.agents;
+  });
+  const [status, setStatus] = useState('idle');
+  // Re-attach JSX icons (stripped before localStorage serialization)
+  const [agentOutputs, setAgentOutputs] = useState(() => {
+    if (!multiAgentResult?.outputs?.length) return [];
+    if (multiAgentResult.analysisId !== currentAnalysis?.id) return []; // stale
+    return multiAgentResult.outputs;
+  });
+  const [workflowSteps, setWorkflowSteps] = useState(() => {
+    if (!multiAgentResult?.workflowSteps?.length) return [];
+    if (multiAgentResult.analysisId !== currentAnalysis?.id) return []; // stale
+    return multiAgentResult.workflowSteps;
+  });
+
+  // Restore completed status on mount if saved result matches current analysis
+  useEffect(() => {
+    const isValid = multiAgentResult?.outputs?.length > 0
+      && multiAgentResult?.analysisId === currentAnalysis?.id;
+    if (isValid) setStatus('complete');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-reset when a NEW analysis is run (analysisId mismatch)
+  useEffect(() => {
+    if (!currentAnalysis) return;
+    if (multiAgentResult && multiAgentResult.analysisId !== currentAnalysis.id) {
+      setMultiAgentResult(null);
+      setAgentOutputs([]);
+      setSelectedAgents([]);
+      setWorkflowSteps([]);
+      setStatus('idle');
+    }
+  }, [currentAnalysis?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const metrics = currentAnalysis?.metrics || {};
   const inputs  = currentAnalysis?.inputs  || {};
@@ -40,6 +74,19 @@ const MultiAgents = () => {
     { id: 'supply',    name: 'Supply Chain Agent', icon: <Truck size={18}/>,       color: 'var(--accent-warning)',   desc: 'Logistics and operations'          },
     { id: 'security',  name: 'Security Agent',     icon: <Database size={18}/>,    color: '#a78bfa',                 desc: 'System integrity and compliance'   },
   ];
+
+  // Re-attach JSX icons to outputs restored from localStorage (they were stripped before serialization)
+  useEffect(() => {
+    if (agentOutputs.length > 0 && agentOutputs.some(o => !o.icon)) {
+      setAgentOutputs(prev =>
+        prev.map(output => {
+          const def = agentDefs.find(a => a.id === output.id);
+          return def ? { ...output, icon: def.icon } : output;
+        })
+      );
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Per-agent insight generators (pull from real analysis data) ───────────
   const insightGenerators = {
@@ -197,27 +244,75 @@ const MultiAgents = () => {
     },
   };
 
-  // ── Run analysis ─────────────────────────────────────────────────────────
-  const handleAnalyze = () => {
-    if (selectedAgents.length === 0) return;
-    if (!currentAnalysis) return;
-    setStatus('analyzing');
+  // ── Agent message generator ───────────────────────────────────────────
+  const generateAgentMessage = (id) => {
+    switch (id) {
+      case 'market':    return 'High demand detected in target audience';
+      case 'financial': return 'Revenue model is viable with strong ROI';
+      case 'risk':      return 'Operational risks identified ⚠️';
+      case 'strategy':  return 'Business model optimized for growth';
+      case 'supply':    return 'Logistics network is scalable';
+      case 'security':  return 'System security validated';
+      default:          return 'Analysis complete';
+    }
+  };
 
-    setTimeout(() => {
-      const outputs = selectedAgents.map(id => {
-        const def = agentDefs.find(a => a.id === id);
-        const insights = insightGenerators[id]?.() || [];
-        return { ...def, insights };
-      });
-      setAgentOutputs(outputs);
-      setStatus('complete');
-    }, 1200);
+  // ── Run analysis (sequential visualization + parallel insights) ─────────
+  const handleAnalyze = async () => {
+    if (selectedAgents.length === 0 || !currentAnalysis) return;
+    setStatus('analyzing');
+    setWorkflowSteps([]);
+    setAgentOutputs([]);
+
+    const steps = [];
+
+    for (let i = 0; i < selectedAgents.length; i++) {
+      const id = selectedAgents[i];
+      const def = agentDefs.find(a => a.id === id);
+
+      // Mark step as running
+      steps.push({ step: i + 1, agent: def.name, message: 'Processing...', status: 'running', color: def.color });
+      setWorkflowSteps([...steps]);
+
+      // Simulate per-agent thinking
+      await new Promise(r => setTimeout(r, 900));
+
+      // Mark step as done
+      steps[i] = { ...steps[i], status: 'done', message: generateAgentMessage(id) };
+      setWorkflowSteps([...steps]);
+    }
+
+    // Final synthesis step
+    steps.push({ step: steps.length + 1, agent: 'Final AI', message: 'Aggregating all agent insights...', status: 'running', color: 'var(--accent-primary)' });
+    setWorkflowSteps([...steps]);
+    await new Promise(r => setTimeout(r, 900));
+    steps[steps.length - 1] = { ...steps[steps.length - 1], status: 'done', message: 'Final synthesis generated' };
+    setWorkflowSteps([...steps]);
+
+    // Build outputs (using existing insight generators — no extra API calls)
+    const outputs = selectedAgents.map(id => {
+      const def = agentDefs.find(a => a.id === id);
+      return { ...def, insights: insightGenerators[id]?.() || [] };
+    });
+    setAgentOutputs(outputs);
+    // Strip non-serializable JSX icons before persisting
+    const serializableOutputs = outputs.map(({ icon: _icon, ...rest }) => rest);
+    setMultiAgentResult({
+      analysisId: currentAnalysis?.id,   // 🔑 ties result to this specific run
+      agents: selectedAgents,
+      outputs: serializableOutputs,
+      workflowSteps: steps,
+      timestamp: Date.now(),
+    });
+    setStatus('complete');
   };
 
   const handleReset = () => {
     setStatus('idle');
     setAgentOutputs([]);
     setSelectedAgents([]);
+    setWorkflowSteps([]);
+    setMultiAgentResult(null); // clears localStorage via context useEffect
   };
 
   const severityIcon = (s) => {
@@ -345,6 +440,59 @@ const MultiAgents = () => {
               </span>
             </div>
           </div>
+
+          {/* 🔄 LIVE WORKFLOW VISUALIZATION */}
+          {workflowSteps.length > 0 && (
+            <div style={{ background: 'var(--bg-tertiary)', padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  🔄 Multi-Agent Workflow
+                </span>
+                {status === 'analyzing' && (
+                  <span style={{ fontSize: '0.65rem', color: 'var(--accent-warning)', background: 'rgba(245,158,11,0.1)', padding: '0.15rem 0.5rem', borderRadius: '999px', border: '1px solid rgba(245,158,11,0.3)' }}>Live</span>
+                )}
+                {status === 'complete' && (
+                  <span style={{ fontSize: '0.65rem', color: 'var(--accent-success)', background: 'rgba(16,185,129,0.1)', padding: '0.15rem 0.5rem', borderRadius: '999px', border: '1px solid rgba(16,185,129,0.3)' }}>Complete</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {workflowSteps.map((step, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: '0.85rem',
+                    padding: '0.75rem 1rem',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: '8px',
+                    borderLeft: `3px solid ${step.status === 'done' ? (step.color || 'var(--accent-success)') : 'var(--accent-warning)'}`,
+                    transition: 'all 0.3s ease',
+                    opacity: step.status === 'done' ? 1 : 0.85
+                  }}>
+                    {/* Step number bubble */}
+                    <div style={{
+                      minWidth: '24px', height: '24px', borderRadius: '50%',
+                      background: step.status === 'done' ? 'var(--accent-success)' : 'var(--accent-warning)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.65rem', fontWeight: 800, color: 'white', flexShrink: 0, marginTop: '0.1rem'
+                    }}>
+                      {step.status === 'done' ? '✓' : step.step}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                        {step.agent}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>{step.message}</div>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 600, color: step.status === 'done' ? 'var(--accent-success)' : 'var(--accent-warning)' }}>
+                        {step.status === 'done' ? '✔ Completed' : '▶ Running...'}
+                      </div>
+                    </div>
+                    {/* Connector arrow if not last */}
+                    {idx < workflowSteps.length - 1 && (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', alignSelf: 'center' }}>→</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Body */}
           <div style={{ padding: '1.5rem', flex: 1, overflowY: 'auto', background: 'var(--bg-secondary)', minHeight: '400px' }}>

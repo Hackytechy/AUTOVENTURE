@@ -251,85 +251,101 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <h2 style={{ fontSize: '1.8rem', marginTop: '3rem', marginBottom: '1.5rem' }}>Strategic Reasoning (LLM Insights)</h2>
+      {/* ── Strategic Reasoning block — only shown when real LLM data exists ── */}
+      {(() => {
+        const explanation = metrics.explanation;
+        const hasLLMInsights = explanation && (
+          (explanation.successScoreReason && explanation.successScoreReason !== 'N/A') ||
+          (Array.isArray(explanation.keyFactors) && explanation.keyFactors.length > 0) ||
+          explanation.riskSummary
+        );
 
-      {/* Model-Specific Analysis Section */}
-      {metrics.explanation?.modelPersonaOutput && (
-        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem', border: '1px solid var(--accent-primary)', background: 'rgba(99, 102, 241, 0.03)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-            <div style={{ background: 'var(--accent-primary)', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>
-              {currentAnalysis.inputs?.model || 'ANALYSIS'} MODE
-            </div>
-            <h3 style={{ margin: 0 }}>Specialized Model Findings</h3>
-          </div>
+        if (!hasLLMInsights) return null;
 
-          <div style={{ display: 'grid', gridTemplateColumns: Array.isArray(metrics.explanation?.modelPersonaOutput?.featureImportance) && metrics.explanation?.modelPersonaOutput?.timeSeriesPattern ? '1fr 1fr' : '1fr', gap: '2rem' }}>
-            
-            {/* XGBoost / Hybrid Feature Importance */}
-            {Array.isArray(metrics.explanation?.modelPersonaOutput?.featureImportance) && (
-              <div>
-                <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                   <Zap size={16} /> Feature Importance (Numerical Reasoning)
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {metrics.explanation.modelPersonaOutput.featureImportance.map((f, i) => (
-                    <div key={i}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.35rem' }}>
-                        <span>{f.feature}</span>
-                        <span style={{ fontWeight: 600 }}>{(f.score * 100).toFixed(0)}%</span>
-                      </div>
-                      <div style={{ height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)' }}>
-                        <div style={{ 
-                          height: '100%', 
-                          width: `${f.score * 100}%`, 
-                          background: 'linear-gradient(90deg, var(--accent-primary), #a78bfa)', 
-                          borderRadius: '4px',
-                          boxShadow: '0 0 10px rgba(99, 102, 241, 0.3)'
-                        }} />
+        return (
+          <>
+            <h2 style={{ fontSize: '1.8rem', marginTop: '3rem', marginBottom: '1.5rem' }}>Strategic Reasoning (LLM Insights)</h2>
+
+            {/* Model-Specific Analysis Section */}
+            {explanation?.modelPersonaOutput && (
+              <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem', border: '1px solid var(--accent-primary)', background: 'rgba(99, 102, 241, 0.03)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                  <div style={{ background: 'var(--accent-primary)', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>
+                    {currentAnalysis.inputs?.model || 'ANALYSIS'} MODE
+                  </div>
+                  <h3 style={{ margin: 0 }}>Specialized Model Findings</h3>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: Array.isArray(explanation?.modelPersonaOutput?.featureImportance) && explanation?.modelPersonaOutput?.timeSeriesPattern ? '1fr 1fr' : '1fr', gap: '2rem' }}>
+                  
+                  {/* XGBoost / Hybrid Feature Importance */}
+                  {Array.isArray(explanation?.modelPersonaOutput?.featureImportance) && (
+                    <div>
+                      <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                         <Zap size={16} /> Feature Importance (Numerical Reasoning)
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {explanation.modelPersonaOutput.featureImportance.map((f, i) => (
+                          <div key={i}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+                              <span>{f.feature}</span>
+                              <span style={{ fontWeight: 600 }}>{(f.score * 100).toFixed(0)}%</span>
+                            </div>
+                            <div style={{ height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)' }}>
+                              <div style={{ 
+                                height: '100%', 
+                                width: `${f.score * 100}%`, 
+                                background: 'linear-gradient(90deg, var(--accent-primary), #a78bfa)', 
+                                borderRadius: '4px',
+                                boxShadow: '0 0 10px rgba(99, 102, 241, 0.3)'
+                              }} />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* LSTM / Hybrid Time Series Pattern */}
+                  {explanation?.modelPersonaOutput?.timeSeriesPattern && (
+                    <div>
+                      <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                         <TrendingUp size={16} /> Temporal Pattern Analysis (Sequential)
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div style={{ background: 'var(--bg-tertiary)', padding: '0.85rem', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--accent-secondary)' }}>
+                          <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Past Trend</p>
+                          <p style={{ margin: '0.25rem 0 0', fontSize: '0.88rem' }}>{explanation.modelPersonaOutput.timeSeriesPattern.past}</p>
+                        </div>
+                        <div style={{ background: 'var(--bg-tertiary)', padding: '0.85rem', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--accent-warning)' }}>
+                          <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Pattern Recognition</p>
+                          <p style={{ margin: '0.25rem 0 0', fontSize: '0.88rem' }}>{explanation.modelPersonaOutput.timeSeriesPattern.pattern}</p>
+                        </div>
+                        <div style={{ background: 'var(--bg-tertiary)', padding: '0.85rem', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--accent-success)' }}>
+                          <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Future Forecast</p>
+                          <p style={{ margin: '0.25rem 0 0', fontSize: '0.88rem' }}>{explanation.modelPersonaOutput.timeSeriesPattern.future}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Hybrid Specific Insight */}
+                {explanation.modelPersonaOutput.hybridInsight && (
+                  <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+                     <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                       <Sparkles size={16} /> Hybrid Intelligence Synthesis
+                     </h4>
+                     <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.6, fontStyle: 'italic', color: 'var(--text-primary)' }}>
+                       "{explanation.modelPersonaOutput.hybridInsight}"
+                     </p>
+                  </div>
+                )}
               </div>
             )}
-
-            {/* LSTM / Hybrid Time Series Pattern */}
-            {metrics.explanation?.modelPersonaOutput?.timeSeriesPattern && (
-              <div>
-                <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                   <TrendingUp size={16} /> Temporal Pattern Analysis (Sequential)
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ background: 'var(--bg-tertiary)', padding: '0.85rem', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--accent-secondary)' }}>
-                    <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Past Trend</p>
-                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.88rem' }}>{metrics.explanation.modelPersonaOutput.timeSeriesPattern.past}</p>
-                  </div>
-                  <div style={{ background: 'var(--bg-tertiary)', padding: '0.85rem', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--accent-warning)' }}>
-                    <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Pattern Recognition</p>
-                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.88rem' }}>{metrics.explanation.modelPersonaOutput.timeSeriesPattern.pattern}</p>
-                  </div>
-                  <div style={{ background: 'var(--bg-tertiary)', padding: '0.85rem', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--accent-success)' }}>
-                    <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Future Forecast</p>
-                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.88rem' }}>{metrics.explanation.modelPersonaOutput.timeSeriesPattern.future}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Hybrid Specific Insight */}
-          {metrics.explanation.modelPersonaOutput.hybridInsight && (
-            <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-               <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                 <Sparkles size={16} /> Hybrid Intelligence Synthesis
-               </h4>
-               <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.6, fontStyle: 'italic', color: 'var(--text-primary)' }}>
-                 "{metrics.explanation.modelPersonaOutput.hybridInsight}"
-               </p>
-            </div>
-          )}
-        </div>
-      )}
+          </>
+        );
+      })()}
       
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '4rem' }}>
         {/* Drawbacks & Risks */}
