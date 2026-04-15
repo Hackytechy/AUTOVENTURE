@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Terminal, Search, Trash2, StopCircle, PlayCircle, Download, Filter } from 'lucide-react';
 
-const API_BASE = process.env.NODE_ENV === "production" ? "https://localhost:5000" : "http://localhost:5001";
+const API_BASE = process.env.NODE_ENV === "production" ? "https://autoventure.onrender.com" : "http://localhost:5001";
 
 const Logs = () => {
   const [logs, setLogs] = useState([]);
