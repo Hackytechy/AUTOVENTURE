@@ -464,8 +464,8 @@ app.get('/health', (req, res) => {
 
 app.get('/api/github-actions', async (req, res) => {
   try {
-    const owner = "priya-sanjay-chauhan";
-    const repo = "auto-venture-website";
+    const owner = "Hackytechy";
+    const repo = "AUTOVENTURE";
 
     const response = await axios.get(
       `https://api.github.com/repos/${owner}/${repo}/actions/runs`,
