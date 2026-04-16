@@ -4,7 +4,24 @@ on:
   push:
     branches: [main]
 
+# ─────────────────────────────────────────────────────────────────
+# Environment variables — change values here, never inline below
+# ─────────────────────────────────────────────────────────────────
+env:
+  BACKEND_IMAGE: nexusai-backend
+  CONTAINER_NAME: test-container
+  BACKEND_PORT: 5001
+  HEALTH_ENDPOINT: http://localhost:5001/health
+  # Startup grace period: how many seconds to wait before first health probe
+  STARTUP_WAIT: 10
+  # Retry settings for the health check
+  MAX_RETRIES: 10
+  RETRY_INTERVAL: 3
+
 jobs:
+  # ───────────────────────────────────────────────────────────────
+  # JOB 1 — Build, validate, and test backend via Docker
+  # ───────────────────────────────────────────────────────────────
   build-and-test:
     runs-on: ubuntu-latest
 
@@ -13,40 +30,88 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # 2. Setup Node
+      # 2. Setup Node.js (used for frontend build + backend dependency install)
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 20
 
-      # 3. Install Backend Dependencies
-      - name: Install Backend
+      # ── BACKEND ────────────────────────────────────────────────
+
+      # 3. Install backend dependencies (keeps npm cache warm for later steps)
+      - name: Install Backend Dependencies
         run: |
           cd backend
           npm install
 
-      # 4. Install Frontend Dependencies
-      - name: Install Frontend
+      # 4. Build the Docker image from ./backend/Dockerfile
+      - name: Build Backend Docker Image
+        run: |
+          docker build -t ${{ env.BACKEND_IMAGE }} ./backend
+
+      # 5. Run the container in detached mode on the configured port
+      - name: Run Backend Container
+        run: |
+          docker run -d \
+            -p ${{ env.BACKEND_PORT }}:${{ env.BACKEND_PORT }} \
+            --name ${{ env.CONTAINER_NAME }} \
+            ${{ env.BACKEND_IMAGE }}
+
+      # 6. Wait for the server to initialise, then poll /health until it responds
+      #    Pipeline fails automatically if the endpoint never becomes healthy.
+      - name: Health-Check Backend API
+        run: |
+          echo "⏳ Waiting ${{ env.STARTUP_WAIT }}s for server to start..."
+          sleep ${{ env.STARTUP_WAIT }}
+
+          echo "🔍 Probing ${{ env.HEALTH_ENDPOINT }} (max ${{ env.MAX_RETRIES }} retries, ${{ env.RETRY_INTERVAL }}s apart)..."
+          RETRIES=0
+          until curl --silent --fail --max-time 5 "${{ env.HEALTH_ENDPOINT }}"; do
+            RETRIES=$((RETRIES + 1))
+            if [ "$RETRIES" -ge "${{ env.MAX_RETRIES }}" ]; then
+              echo "❌ Health-check failed after ${{ env.MAX_RETRIES }} attempts."
+              echo "── Container logs ──────────────────────────────────────"
+              docker logs ${{ env.CONTAINER_NAME }}
+              echo "────────────────────────────────────────────────────────"
+              exit 1
+            fi
+            echo "  Attempt $RETRIES/${{ env.MAX_RETRIES }} — retrying in ${{ env.RETRY_INTERVAL }}s..."
+            sleep ${{ env.RETRY_INTERVAL }}
+          done
+          echo "✅ Backend healthy."
+
+      # 7. Cleanup — always runs so stale containers never block re-runs
+      - name: Cleanup Docker Container
+        if: always()
+        run: |
+          docker stop ${{ env.CONTAINER_NAME }} || true
+          docker rm   ${{ env.CONTAINER_NAME }} || true
+          echo "🧹 Container stopped and removed."
+
+      # ── FRONTEND ───────────────────────────────────────────────
+
+      # 8. Install frontend dependencies
+      - name: Install Frontend Dependencies
         run: |
           cd frontend
           npm install
 
-      # 5. Build Frontend
+      # 9. Build the Next.js frontend (validates the build is not broken)
       - name: Build Frontend
         run: |
           cd frontend
           npm run build
 
-      # 6. Run Backend Check
-      - name: Backend Lint/Test
-        run: |
-          cd backend
-          node -e "console.log('Backend running fine')"
-
+  # ───────────────────────────────────────────────────────────────
+  # JOB 2 — Deployment (Render auto-deploys on push; no changes here)
+  # ───────────────────────────────────────────────────────────────
   deploy:
     needs: build-and-test
     runs-on: ubuntu-latest
 
     steps:
       - name: Deploy Message
-        run: echo "Deploying application..."
+        run: |
+          echo "✅ All checks passed."
+          echo "🚀 Render will auto-deploy the backend from the main branch."
+          echo "🌐 Vercel will auto-deploy the frontend from the main branch."
