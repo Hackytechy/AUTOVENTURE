@@ -3,7 +3,14 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
-import axios from 'axios';dotenv.config();
+import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -28,6 +35,7 @@ const PROMPT_VERSION = 'v1.4';
 const llmLogs = [];
 let mlopsMetrics = [];
 let driftDetected = false;
+let lastModelVersion = null;
 
 const logLLMRequest = ({ inputs, model, modelName, success, latencyMs, error, engine }) => {
   const actualModel = modelName || model || 'LLM';
@@ -558,6 +566,39 @@ app.get('/api/system-health', (req, res) => {
 
 app.get('/api/alerts', (req, res) => {
   res.json(devOpsAlerts);
+});
+
+app.get('/api/model-version', (req, res) => {
+  try {
+    // Read from backend/models/ (consolidated path)
+    const modelPath = path.join(__dirname, 'models/model_v1.json');
+    const stats = fs.statSync(modelPath);
+    const content = fs.readFileSync(modelPath, 'utf8');
+    const data = JSON.parse(content);
+
+    // Dynamic Version Change Logging
+    if (lastModelVersion && lastModelVersion !== data.version) {
+      llmLogs.push({
+        type: "MLOPS",
+        source: "DVC_MONITOR",
+        message: `[MLOPS] Model version updated → ${data.version}`,
+        timestamp: Date.now(),
+        success: true
+      });
+      if (llmLogs.length > 100) llmLogs.shift();
+    }
+    lastModelVersion = data.version;
+
+    res.json({
+      model: data.model,
+      version: data.version,
+      accuracy: data.accuracy,
+      lastUpdated: stats.mtime.toISOString()
+    });
+  } catch (err) {
+    console.error("DVC API Error:", err.message);
+    res.status(500).json({ error: "Model sync unavailable" });
+  }
 });
 
 // ════════════════════════════════════════════════════════════════════════════

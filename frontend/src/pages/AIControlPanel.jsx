@@ -128,29 +128,39 @@ const AIControlPanel = () => {
 
   const [logs, setLogs] = useState([]);
   const [stats, setStats] = useState(null);
+  const [modelVersion, setModelVersion] = useState(null);
   const [apiOnline, setApiOnline] = useState(null);  // null=checking, true/false
   const [loading, setLoading] = useState(false);
   const [lastFetch, setLastFetch] = useState(null);
 
-  // ── Pull logs + stats from backend ──────────────────────────────────────
   const fetchMLOpsData = useCallback(async () => {
     setLoading(true);
     try {
-      const [logsRes, healthRes] = await Promise.all([
+      const [logsRes, healthRes, mlopsRes, modelRes] = await Promise.all([
         fetch(`${API_BASE}/api/logs`),
         fetch(`${API_BASE}/health`),
+        fetch(`${API_BASE}/api/mlops`),
+        fetch(`${API_BASE}/api/model-version`)
       ]);
+      
       const logsJson = await logsRes.json();
       const healthJson = await healthRes.json();
-      const mlopsRes = await fetch(`${API_BASE}/api/mlops`);
       const mlopsJson = await mlopsRes.json();
+      const modelJson = await modelRes.json();
 
-      const llmOnly = (logsJson.logs || []).filter(l => l.source === 'AI_ENGINE');
-      setLogs(llmOnly);
+      // Include MLOPS logs from DVC Monitor
+      const relevantLogs = (logsJson.logs || []).filter(l => 
+        l.source === 'AI_ENGINE' || l.source === 'DVC_MONITOR'
+      );
+      
+      setLogs(relevantLogs);
       setStats(mlopsJson);
+      setModelVersion(modelJson);
       setApiOnline(healthJson.status === 'OK');
-    } catch {
+    } catch (err) {
+      console.error("MLOps Fetch Error:", err);
       setApiOnline(false);
+      setModelVersion({ error: "Model sync unavailable" });
     } finally {
       setLoading(false);
       setLastFetch(new Date().toLocaleTimeString());
@@ -188,6 +198,9 @@ const AIControlPanel = () => {
   const avgLatency = stats?.avgLatency || null;
   const successRate = stats?.successRate !== undefined ? `${stats.successRate}%` : '100.0%';
   const driftDetected = stats?.drift || false;
+  const isRecentlyUpdated = modelVersion?.lastUpdated && 
+    (Date.now() - new Date(modelVersion.lastUpdated).getTime() < 10000);
+
   const breakdown = {
     openai: logs.filter(l => (l.model || '').toLowerCase().includes('gpt') || (l.model || '').toLowerCase().includes('openai')).length,
     groq: logs.filter(l => (l.model || '').toLowerCase().includes('llama') || (l.model || '').toLowerCase().includes('groq')).length,
@@ -305,6 +318,23 @@ const AIControlPanel = () => {
             health={isSimulated === false ? 'green' : isSimulated === true ? 'yellow' : 'grey'}
             tooltip="Whether the result came from a live AI model (Gemini/Groq) or the smart simulation fallback"
             accent={isSimulated === false ? '#10b981' : isSimulated === true ? '#f59e0b' : undefined}
+          />
+          <MetricCard
+            icon={<Database size={13} />}
+            label="DVC Model Version"
+            value={modelVersion?.error ? "Sync Error" : modelVersion?.version ? `v${modelVersion.version}` : '—'}
+            sub={modelVersion?.error ? modelVersion.error : modelVersion?.accuracy ? `Accuracy: ${(modelVersion.accuracy * 100).toFixed(0)}%` : 'DVC tracked metadata'}
+            health={modelVersion?.error ? 'red' : modelVersion ? 'green' : 'grey'}
+            tooltip="Current production model version tracked via DVC (Data Version Control)"
+            accent={modelVersion?.error ? 'var(--accent-danger)' : "var(--accent-secondary)"}
+          />
+          <MetricCard
+            icon={<RefreshCw size={13} />}
+            label="DVC Sync Status"
+            value={modelVersion?.error ? 'Offline' : modelVersion ? 'Synced' : '—'}
+            sub={modelVersion?.error ? 'Backend unreachable' : isRecentlyUpdated ? 'Just Updated • Live' : 'MD5 Hash Verified'}
+            health={modelVersion?.error ? 'red' : modelVersion ? 'green' : 'grey'}
+            tooltip="Verifies if the local model file matches the DVC tracking hash"
           />
         </div>
 

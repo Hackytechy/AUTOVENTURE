@@ -44,6 +44,15 @@ jobs:
           cd backend
           npm install
 
+      # 3.5 Verify DVC Metadata
+      - name: Verify DVC Metadata
+        run: |
+          if [ ! -f backend/models/model_v1.json.dvc ]; then
+            echo "❌ DVC metadata file missing!"
+            exit 1
+          fi
+          echo "✅ DVC metadata verified."
+
       # 4. Build the Docker image from ./backend/Dockerfile
       - name: Build Backend Docker Image
         run: |
