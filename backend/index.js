@@ -40,7 +40,7 @@ const logLLMRequest = ({ inputs, model, modelName, success, latencyMs, error, en
     source: "AI_ENGINE",
     message: success ? `Response generated (${latencyMs}ms)` : (error || "Unknown Error"),
     timestamp: Date.now(),
-    model: actualModel,
+    model: modelName,
     latencyMs: latencyMs || 0,
     success: success
   });
@@ -49,9 +49,9 @@ const logLLMRequest = ({ inputs, model, modelName, success, latencyMs, error, en
   llmLogs.push({
     type: "MLOPS",
     source: "MLOPS_TRACKER",
-    message: `Model ${actualModel} responded in ${latencyMs || 0}ms`,
+    message: `Model ${modelName} responded in ${latencyMs || 0}ms`,
     timestamp: Date.now(),
-    model: actualModel,
+    model: modelName,
     latencyMs: latencyMs || 0,
     success: success
   });
