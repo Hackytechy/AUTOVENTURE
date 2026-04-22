@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ShieldCheck, AlertTriangle, Cpu, HardDrive, Activity, Server, Clock, Zap, Info, Wifi } from 'lucide-react';
 
-const API_BASE = process.env.NODE_ENV === 'production' 
-  ? 'https://auto-venture-website.onrender.com' 
+const API_BASE = process.env.NODE_ENV === 'production'
+  ? 'https://autoventure.onrender.com'
   : 'http://localhost:5001';
 
 const OmniGuard = () => {
@@ -23,13 +23,13 @@ const OmniGuard = () => {
 
       if (healthRes.ok) setHealth(await healthRes.json());
       if (alertsRes.ok) setAlerts(await alertsRes.json());
-      
+
       if (logsRes.ok) {
         const logsData = await logsRes.json();
         // Filter for self-healing/retry/error keywords
-        const filtered = (logsData.logs || []).filter(l => 
-          l.message.toLowerCase().includes('retry') || 
-          l.message.toLowerCase().includes('fallback') || 
+        const filtered = (logsData.logs || []).filter(l =>
+          l.message.toLowerCase().includes('retry') ||
+          l.message.toLowerCase().includes('fallback') ||
           l.type === 'ERROR'
         ).slice(0, 5); // Max 5 logs
         setLogs(filtered);
@@ -54,15 +54,15 @@ const OmniGuard = () => {
   }, [fetchAllData]);
 
   // Derive system status dot securely from alerts length
-  const systemStatus = alerts.length > 5 
-    ? { label: 'Critical Alert',    color: 'var(--accent-danger)',   dot: 'danger'  }
-    : alerts.length > 0 
-    ? { label: 'Elevated Warning',  color: 'var(--accent-warning)',  dot: 'warning' }
-    : { label: 'All Systems Normal',color: 'var(--accent-success)',  dot: 'success' };
+  const systemStatus = alerts.length > 5
+    ? { label: 'Critical Alert', color: 'var(--accent-danger)', dot: 'danger' }
+    : alerts.length > 0
+      ? { label: 'Elevated Warning', color: 'var(--accent-warning)', dot: 'warning' }
+      : { label: 'All Systems Normal', color: 'var(--accent-success)', dot: 'success' };
 
   return (
     <div className="container animate-fade-in" style={{ padding: '2rem' }}>
-      
+
       {/* STATUS STRIP */}
       <div className="glass-panel" style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -78,8 +78,8 @@ const OmniGuard = () => {
         </div>
         <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
           <div style={{ textAlign: 'center' }}>
-             <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Last Updated</p>
-             <p style={{ margin: 0, fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', marginTop: '0.2rem' }}>{lastUpdated}</p>
+            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Last Updated</p>
+            <p style={{ margin: 0, fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', marginTop: '0.2rem' }}>{lastUpdated}</p>
           </div>
           <div style={{ textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Active Alerts</p>
@@ -137,7 +137,7 @@ const OmniGuard = () => {
           <div style={{ padding: '1.5rem', flex: 1, overflowY: 'auto', maxHeight: '350px' }}>
             {alerts.length === 0 ? (
               <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.85rem', marginTop: '2rem' }}>
-                 No active alerts detected.
+                No active alerts detected.
               </div>
             ) : (
               alerts.slice(0, 5).map((alert, idx) => (
@@ -175,7 +175,7 @@ const OmniGuard = () => {
                     <div style={{
                       position: 'absolute', left: '-1.85rem', top: '0.25rem',
                       width: '12px', height: '12px',
-                      background: log.type === 'ERROR' ? 'var(--accent-danger)' : 'var(--accent-success)', 
+                      background: log.type === 'ERROR' ? 'var(--accent-danger)' : 'var(--accent-success)',
                       border: '2px solid var(--bg-tertiary)', borderRadius: '50%'
                     }} />
                     <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>

@@ -4,7 +4,7 @@
 // Dynamically match the backend URL to the current host (localhost or 127.0.0.1)
 const BACKEND_URL =
   process.env.NODE_ENV === "production"
-    ? "https://auto-venture-website.onrender.com"
+    ? "https://autoventure.onrender.com"
     : "http://localhost:5001";
 
 

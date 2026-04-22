@@ -7,7 +7,7 @@ import {
 
 const API_BASE =
    process.env.NODE_ENV === "production"
-      ? "https://auto-venture-website.onrender.com"
+      ? "https://autoventure.onrender.com"
       : "http://localhost:5001";
 
 

@@ -39,7 +39,7 @@ let lastModelVersion = null;
 
 const logLLMRequest = ({ inputs, model, modelName, success, latencyMs, error, engine }) => {
   const actualModel = modelName || model || 'LLM';
-  
+
   // 1. Standard Engine Log
   llmLogs.push({
     type: success ? "INFO" : "ERROR",
@@ -78,7 +78,7 @@ const logLLMRequest = ({ inputs, model, modelName, success, latencyMs, error, en
   if (mlopsMetrics.length >= 5) {
     const last5 = mlopsMetrics.slice(-5);
     const avgLatency = last5.reduce((sum, log) => sum + log.latency, 0) / 5;
-    
+
     if (avgLatency > 4000) {
       driftDetected = true;
       llmLogs.push({
@@ -472,8 +472,8 @@ app.get('/health', (req, res) => {
 
 app.get('/api/github-actions', async (req, res) => {
   try {
-    const owner = "priya-sanjay-chauhan";
-    const repo = "auto-venture-website";
+    const owner = "Hackytechy";
+    const repo = "AUTOVENTURE";
 
     const response = await axios.get(
       `https://api.github.com/repos/${owner}/${repo}/actions/runs`,
@@ -532,9 +532,9 @@ app.get('/api/mlops', (req, res) => {
   const totalRequests = mlopsMetrics.length;
   const successes = mlopsMetrics.filter(m => m.status === 'OK').length;
   const successRate = totalRequests > 0 ? (successes / totalRequests) * 100 : 100;
-  
-  const avgLatency = totalRequests > 0 
-    ? mlopsMetrics.reduce((sum, m) => sum + m.latency, 0) / totalRequests 
+
+  const avgLatency = totalRequests > 0
+    ? mlopsMetrics.reduce((sum, m) => sum + m.latency, 0) / totalRequests
     : 0;
 
   res.json({
@@ -629,7 +629,7 @@ app.post('/api/analyze', async (req, res) => {
     // 2. RUN LLM ENGINE (Tiered API)
     const llmRes = await executeTieredLLM(prompt, req.body);
     const llmData = llmRes.data || {};
-    
+
     // Dynamic Alert Engine Checks
     if (llmRes.latency && llmRes.latency > 4000) {
       devOpsAlerts.unshift({
