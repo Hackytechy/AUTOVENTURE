@@ -33,14 +33,20 @@ const PROMPT_VERSION = 'v1.4';
 // 2. LLM LOGGING LAYER  (in-memory, capped at 500 entries)
 // ════════════════════════════════════════════════════════════════════════════
 const llmLogs = [];
+let mlopsMetrics = [];
+let driftDetected = false;
+let lastModelVersion = null;
 
 const logLLMRequest = ({ inputs, model, modelName, success, latencyMs, error, engine }) => {
+  const actualModel = modelName || model || 'LLM';
+
+  // 1. Standard Engine Log
   llmLogs.push({
     type: success ? "INFO" : "ERROR",
     source: "AI_ENGINE",
     message: success ? `Response generated (${latencyMs}ms)` : (error || "Unknown Error"),
     timestamp: Date.now(),
-    model: modelName,
+    model: actualModel,
     latencyMs: latencyMs || 0,
     success: success
   });
@@ -49,15 +55,45 @@ const logLLMRequest = ({ inputs, model, modelName, success, latencyMs, error, en
   llmLogs.push({
     type: "MLOPS",
     source: "MLOPS_TRACKER",
-    message: `Model ${modelName} responded in ${latencyMs || 0}ms`,
+    message: `Model ${actualModel} responded in ${latencyMs || 0}ms`,
     timestamp: Date.now(),
-    model: modelName,
+    model: actualModel,
     latencyMs: latencyMs || 0,
     success: success
   });
-  if (llmLogs.length > 50) llmLogs.shift();
-};
 
+  // 3. Track MLOps Global Array
+  mlopsMetrics.push({
+    modelUsed: actualModel,
+    promptVersion: PROMPT_VERSION,
+    latency: latencyMs || 0,
+    status: success ? "OK" : "FAIL",
+    timestamp: Date.now(),
+    confidenceScore: null // Derived natively eventually
+  });
+
+  if (mlopsMetrics.length > 50) mlopsMetrics.shift();
+
+  // 4. Drift Analysis (Rolling Window)
+  if (mlopsMetrics.length >= 5) {
+    const last5 = mlopsMetrics.slice(-5);
+    const avgLatency = last5.reduce((sum, log) => sum + log.latency, 0) / 5;
+
+    if (avgLatency > 4000) {
+      driftDetected = true;
+      llmLogs.push({
+        type: "WARN",
+        source: "MLOPS_ALERT",
+        message: "⚠️ Drift detected: latency increasing",
+        timestamp: Date.now()
+      });
+    } else {
+      driftDetected = false;
+    }
+  }
+
+  if (llmLogs.length > 100) llmLogs.shift();
+};
 const isValidKey = (key) =>
   key && key !== 'your_groq_api_key_here' && key !== 'your_api_key_here' && key.length > 10;
 
@@ -491,6 +527,78 @@ app.get('/api/logs/stats', (req, res) => {
   });
 });
 
+app.get('/api/mlops', (req, res) => {
+  const totalRequests = mlopsMetrics.length;
+  const successes = mlopsMetrics.filter(m => m.status === 'OK').length;
+  const successRate = totalRequests > 0 ? (successes / totalRequests) * 100 : 100;
+
+  const avgLatency = totalRequests > 0
+    ? mlopsMetrics.reduce((sum, m) => sum + m.latency, 0) / totalRequests
+    : 0;
+
+  res.json({
+    latest: mlopsMetrics.length > 0 ? mlopsMetrics[mlopsMetrics.length - 1] : null,
+    avgLatency: Math.round(avgLatency),
+    successRate: successRate.toFixed(1),
+    totalRequests,
+    lastModelUsed: mlopsMetrics.length > 0 ? mlopsMetrics[mlopsMetrics.length - 1].modelUsed : "None",
+    promptVersion: PROMPT_VERSION,
+    drift: driftDetected
+  });
+});
+
+app.get('/api/mlops/history', (req, res) => {
+  res.json(mlopsMetrics);
+});
+
+let devOpsAlerts = [];
+
+app.get('/api/system-health', (req, res) => {
+  const cpu = process.cpuUsage();
+  const memory = process.memoryUsage();
+  res.json({
+    cpuUsage: ((cpu.user + cpu.system) / 1000000).toFixed(2),
+    memoryUsage: (memory.heapUsed / 1024 / 1024).toFixed(2),
+    uptime: process.uptime().toFixed(0)
+  });
+});
+
+app.get('/api/alerts', (req, res) => {
+  res.json(devOpsAlerts);
+});
+
+app.get('/api/model-version', (req, res) => {
+  try {
+    // Read from backend/models/ (consolidated path)
+    const modelPath = path.join(__dirname, 'models/model_v1.json');
+    const stats = fs.statSync(modelPath);
+    const content = fs.readFileSync(modelPath, 'utf8');
+    const data = JSON.parse(content);
+
+    // Dynamic Version Change Logging
+    if (lastModelVersion && lastModelVersion !== data.version) {
+      llmLogs.push({
+        type: "MLOPS",
+        source: "DVC_MONITOR",
+        message: `[MLOPS] Model version updated → ${data.version}`,
+        timestamp: Date.now(),
+        success: true
+      });
+      if (llmLogs.length > 100) llmLogs.shift();
+    }
+    lastModelVersion = data.version;
+
+    res.json({
+      model: data.model,
+      version: data.version,
+      accuracy: data.accuracy,
+      lastUpdated: stats.mtime.toISOString()
+    });
+  } catch (err) {
+    console.error("DVC API Error:", err.message);
+    res.status(500).json({ error: "Model sync unavailable" });
+  }
+});
 // ════════════════════════════════════════════════════════════════════════════
 // POST /api/analyze — MAIN ENDPOINT
 // ════════════════════════════════════════════════════════════════════════════
