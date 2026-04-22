@@ -8,7 +8,7 @@ import { useAppContext } from '../context/AppContext';
 
 const API_BASE =
   process.env.NODE_ENV === "production"
-    ? "https://auto-venture-website.onrender.com"
+    ? "https://autoventure.onrender.com"
     : "http://localhost:5001";
 
 // ── Tooltip component ────────────────────────────────────────────────────────
@@ -142,17 +142,17 @@ const AIControlPanel = () => {
         fetch(`${API_BASE}/api/mlops`),
         fetch(`${API_BASE}/api/model-version`)
       ]);
-      
+
       const logsJson = await logsRes.json();
       const healthJson = await healthRes.json();
       const mlopsJson = await mlopsRes.json();
       const modelJson = await modelRes.json();
 
       // Include MLOPS logs from DVC Monitor
-      const relevantLogs = (logsJson.logs || []).filter(l => 
+      const relevantLogs = (logsJson.logs || []).filter(l =>
         l.source === 'AI_ENGINE' || l.source === 'DVC_MONITOR'
       );
-      
+
       setLogs(relevantLogs);
       setStats(mlopsJson);
       setModelVersion(modelJson);
@@ -198,7 +198,7 @@ const AIControlPanel = () => {
   const avgLatency = stats?.avgLatency || null;
   const successRate = stats?.successRate !== undefined ? `${stats.successRate}%` : '100.0%';
   const driftDetected = stats?.drift || false;
-  const isRecentlyUpdated = modelVersion?.lastUpdated && 
+  const isRecentlyUpdated = modelVersion?.lastUpdated &&
     (Date.now() - new Date(modelVersion.lastUpdated).getTime() < 10000);
 
   const breakdown = {
